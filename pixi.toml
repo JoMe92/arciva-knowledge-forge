@@ -11,6 +11,7 @@ dev = "streamlit run tools/labeling_tool/main.py"
 [dependencies]
 streamlit = ">=1.52.1,<2"
 pandas = ">=2.3.3,<3"
+dvc-gs = ">=3.0.2,<4"
 
 [pypi-dependencies]
 torch = ">=2.9.1, <3"
