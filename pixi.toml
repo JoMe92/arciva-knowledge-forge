@@ -7,6 +7,8 @@ version = "0.1.0"
 
 [tasks]
 dev = "streamlit run tools/labeling_tool/main.py"
+train = "python finetune.py"
+
 
 [dependencies]
 streamlit = ">=1.52.1,<2"
@@ -23,3 +25,5 @@ bitsandbytes = ">=0.49.0, <0.50"
 accelerate = ">=1.12.0, <2"
 wandb = ">=0.23.1, <0.24"
 dvc = { version = ">=3.64.2, <4", extras = ["gcs"] }
+datasets = ">=2.14.0"
+

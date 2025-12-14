@@ -7,7 +7,7 @@ ENV DEBIAN_FRONTEND=noninteractive
 # Set working directory
 WORKDIR /app
 
-# Install system dependencies (git is often needed for pip installing from git)
+# Install system dependencies
 RUN apt-get update && apt-get install -y \
     git \
     && rm -rf /var/lib/apt/lists/*
@@ -16,10 +16,16 @@ RUN apt-get update && apt-get install -y \
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
+# Copy DVC configuration
+COPY .dvc /app/.dvc
+COPY .dvcignore /app/.dvcignore
+
 # Copy project files
+# We accept that this might copy data if it's not in .dockerignore, but typically data is ignored or we are careful.
+# Ideally we copy specific files, but COPY . . is standard for simple setups.
 COPY . .
 
-# Set env var for DVC to work in container if needed (e.g. no analytics)
+# Set env var for DVC
 ENV DVC_NO_ANALYTICS=1
 
 # Default command
