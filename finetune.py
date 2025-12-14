@@ -13,19 +13,47 @@ from trl import SFTTrainer
 
 def formatting_prompts_func(example):
     output_texts = []
-    # Check if 'instruction' and 'response' keys exist, otherwise fallback or error
-    keys = example.keys()
-    if 'instruction' in keys and 'response' in keys:
-        for instruction, response in zip(example['instruction'], example['response']):
-            text = f"### Instruction:\\n{instruction}\\n\\n### Response:\\n{response}"
+    
+    # helper to get value from potential keys
+    instruction = example.get('instruction')
+    response = example.get('response') or example.get('output') # Support both keys
+
+    # Handle batch (list) vs single (scalar)
+    if isinstance(instruction, list):
+        # Batch mode
+        for i, r in zip(instruction, response):
+            text = f"### Instruction:\\n{i}\\n\\n### Response:\\n{r}"
             output_texts.append(text)
-    elif 'text' in keys:
-        return example['text']
+        return output_texts
     else:
-        # Fallback or just return empty/error if structure is unknown
-        # For now, assuming common instruction/response or text format
-        pass 
-    return output_texts
+        # Single mode - logic suggests we should return a list for SFTTrainer even if single?
+        # But debug showed returning list caused AttributeError in add_eos (text became list).
+        # So for single input, we probably return single string, OR SFTTrainer maps it correctly?
+        # If the map is unbatched, returning [text] might make the column value [text].
+        # Returning text makes it text.
+        # However, SFTTrainer documentation emphasizes "list of strings".
+        # Let's try returning a list first (standard for SFTTrainer), but if that fails, 
+        # it might be because map(batched=False). 
+        # But wait, if I return list of 1 string here, and it failed before...
+        # Before it failed because zip(str, str) produced list of MANY strings (chars).
+        # Example: zip("No", "Yes") -> [('N','Y'), ('o','e'), ...]
+        # So text column became a list of strings ["...","..."].
+        # add_eos checks text.endswith -> fails on list.
+        # If I return [ "full text" ], then text column becomes "full text"?
+        # Or ["full text"]?
+        # Usually datasets.map(batched=False) expects dict. SFTTrainer wrapper expects list of strings?
+        # Let's assume standard SFT usage: return a LIST OF STRINGS which corresponds to the batch.
+        # If input is single (scalar), then "batch" size is 1.
+        # So I should return ["full text"].
+        # If that fails, then SFTTrainer really expects scalar.
+        # But "zip" on strings produced a list of length N.
+        # And that caused "text" to be a list. 
+        # So if I return list of length 1, "text" might be list of length 1?
+        # OR "text" might be the string?
+        # A scalar return is safer for unbatched map.
+        text = f"### Instruction:\\n{instruction}\\n\\n### Response:\\n{response}"
+        return text 
+
 
 
 def prepare_data():
@@ -140,6 +168,7 @@ def train():
         use_cpu=not use_gpu,
         max_length=512 if use_gpu else 128, # Changed to max_length per error suggestion
         packing=False, # Moved here
+        report_to="none" if not use_gpu else "wandb",
     )
 
     # 6. Trainer
