@@ -90,7 +90,7 @@ def load_data(filepath, limit_pct=1.0):
 
 def get_label_stats():
     """Calculates label distribution from the processed file."""
-    stats = {"✅ Correct": 0, "❌ Factual Error": 0, "🚩 Style Inconsistency": 0}
+    stats = {"✅ Verified": 0, "✍️ Modified": 0, "🗑️ Discarded": 0}
     total = 0
     if os.path.exists(PROCESSED_DATA_PATH):
         with open(PROCESSED_DATA_PATH, 'r') as f:
@@ -99,10 +99,13 @@ def get_label_stats():
                     entry = json.loads(line)
                     meta = entry.get("review_metadata", {})
                     lbl = meta.get("label", "")
-                    # Mappings in case label format differs slightly or to catch "Correct" vs "✅ Correct"
-                    if "Correct" in lbl: stats["✅ Correct"] += 1
-                    elif "Error" in lbl: stats["❌ Factual Error"] += 1
-                    elif "Inconsistent" in lbl: stats["🚩 Style Inconsistency"] += 1
+                    
+                    if "Verified" in lbl or "Correct" in lbl: stats["✅ Verified"] += 1
+                    elif "Modified" in lbl: stats["✍️ Modified"] += 1
+                    elif "Discarded" in lbl: stats["🗑️ Discarded"] += 1
+                    # Legacy mapping if needed, or just let them fall through/count as other?
+                    # For now, let's keep it simple.
+                    
                     total += 1
                 except:
                     pass
@@ -234,54 +237,41 @@ if len(st.session_state['data_queue']) > 0 and st.session_state['current_index']
                 "Edit Answer:", 
                 value=asst_msg["content"], 
                 height=300,
-                key=f"answer_{st.session_state['current_index']}" # Unique key per item
+                key=f"answer_{st.session_state['current_index']}", # Unique key per item
+                on_change=lambda: None # Force rerun on blur
             )
             
         # Review Controls
         st.markdown("### verification")
         
-        col1, col2 = st.columns([2, 1])
-        
-        with col1:
-             label = st.radio(
-                "Label:",
-                ["✅ Correct", "❌ Factual Error", "🚩 Style Inconsistency"],
-                horizontal=True,
-                key=f"label_{st.session_state['current_index']}"
-            )
-            
-        with col2:
-            auto_save = st.toggle("Auto-save on Next", value=True)
-            
-        # Actions
-        btn_cols = st.columns(3)
-        
-        def commit_review():
-            # Save logic
-            clean_label = label # Save full string e.g. "✅ Correct"
-            save_entry(item, clean_label, new_answer, item)
-            
-            # Advice State
-            st.session_state['current_index'] += 1
-            st.session_state['reviews_this_session'] += 1
-            # st.rerun() called automatically by button callback usually? 
-            # Streamlit buttons re-run script. Logic needs to be inside 'if button'.
-            
-        if auto_save:
-            if st.button("Next Pair ➡️", use_container_width=True, type="primary"):
-                commit_review()
-                st.rerun()
+        if new_answer != original_answer:
+            current_status = "✍️ Modified"
+            st.info("Status: **Modified** (Changes detected)")
         else:
-            if st.button("Confirm & Save", use_container_width=True, type="primary"):
-                commit_review()
+            current_status = "✅ Verified"
+            st.success("Status: **Verified** (No changes)")
+            
+        col1, col2 = st.columns([1, 1])
+        
+        # Discard Logic
+        with col1:
+            if st.button("🗑️ Discard Pair", type="secondary", use_container_width=True):
+                 save_entry(item, "🗑️ Discarded", new_answer, item) # Save as discarded
+                 st.session_state['current_index'] += 1
+                 st.session_state['reviews_this_session'] += 1
+                 st.rerun()
+
+        # Save/Next Logic
+        with col2:
+            # We combine "Next" and "Save" into one primary action
+            # Requirement: "The user should also have the option to close pairs completely" -> Done via Discard/Save
+            # "that should then also be tracked" -> Done via save_entry
+            
+            if st.button("Confirm & Next ➡️", type="primary", use_container_width=True):
+                save_entry(item, current_status, new_answer, item)
+                st.session_state['current_index'] += 1
+                st.session_state['reviews_this_session'] += 1
                 st.rerun()
-                
-            # Need a "Next" button enabled only after save? 
-            # In manual mode, usually you save AND go next in one click, or Save then Next.
-            # Req: "Must actively click Confirm... before Next button becomes accessible"
-            # That implies two clicks. Let's simplify: "Confirm & Save" saves and advances.
-            # If user wants to save without advancing, that's "Save Draft". Req says "Save and advance".
-            # So "Confirm & Save" doing both satisfies "User must click Confirm".
             
 elif len(st.session_state['data_queue']) > 0:
     st.success("Session Complete! 🎉")
