@@ -148,13 +148,15 @@ with st.sidebar:
     # Sampling Controls
     # Only show if queue is empty or reset requested
     if len(st.session_state['data_queue']) == 0:
+        input_path = st.text_input("Input File Path", value=RAW_DATA_PATH)
+        
         sample_pct = st.slider("Sample Size (%)", 1, 100, 10)
         full_dataset = st.checkbox("Full Dataset (100%)")
         if full_dataset:
             sample_pct = 100
         
         if st.button("Load Session"):
-            queue, total_avail, total_reviewed = load_data(RAW_DATA_PATH, sample_pct/100.0)
+            queue, total_avail, total_reviewed = load_data(input_path, sample_pct/100.0)
             st.session_state['data_queue'] = queue
             st.session_state['total_avail_count'] = total_avail # Snapshot for stats
             st.session_state['total_reviewed_history'] = total_reviewed
