@@ -6,3 +6,6 @@ accelerate
 wandb
 dvc[gcs]
 torch
+
+streamlit
+pandas

@@ -1,0 +1,4 @@
+[core]
+    remote = gcs-storage
+['remote "gcs-storage"']
+    url = gs://PROJECT_ID-arciva-storage/dvc_cache
