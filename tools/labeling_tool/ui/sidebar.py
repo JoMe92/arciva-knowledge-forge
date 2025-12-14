@@ -18,6 +18,14 @@ def render_sidebar(project):
         st.markdown("---")
         st.title("⚙️ Config")
         
+        # Save Format
+        current_format = project.get("save_format", "Multi-turn Dialog")
+        new_format = st.selectbox("Save Format", ["Multi-turn Dialog", "Alpaca"], index=0 if current_format == "Multi-turn Dialog" else 1)
+        
+        if new_format != current_format:
+            st.session_state['project_manager'].update_project(st.session_state['active_project_id'], {"save_format": new_format})
+            st.rerun()
+
         # Paths from Project
         current_raw_path = project.get("raw_data_path")
         current_processed_path = project.get("processed_data_path")
@@ -27,18 +35,25 @@ def render_sidebar(project):
         if len(st.session_state['data_queue']) == 0:
             sample_pct = st.slider("Sample Size (%)", 1, 100, 10)
             full_dataset = st.checkbox("Full Dataset (100%)")
+            include_reviewed = st.checkbox("Include previously labeled data", help="Include already verified items in the session (will be skipped/marked as done).")
+            
             if full_dataset:
                 sample_pct = 100
             
             if st.button("Load Session"):
-                queue, total_avail, total_reviewed = DataManager.load_data(current_raw_path, current_processed_path, sample_pct/100.0)
+                queue, total_avail, total_reviewed = DataManager.load_data(current_raw_path, current_processed_path, sample_pct/100.0, include_reviewed=include_reviewed)
                 if not queue and total_avail == 0:
                     st.error(f"No data found at {current_raw_path}")
                 else:
                     st.session_state['data_queue'] = queue
                     st.session_state['total_avail_count'] = total_avail
                     st.session_state['total_reviewed_history'] = total_reviewed
-                    st.session_state['current_index'] = 0
+                    
+                    if include_reviewed:
+                         st.session_state['current_index'] = min(total_reviewed, len(queue))
+                    else:
+                         st.session_state['current_index'] = 0
+
                     st.session_state['reviews_this_session'] = 0
                     st.rerun()
                 

@@ -25,7 +25,7 @@ class DataManager:
         return None 
 
     @staticmethod
-    def load_data(raw_path, processed_path, limit_pct=1.0):
+    def load_data(raw_path, processed_path, limit_pct=1.0, include_reviewed=False):
         """
         Loads data, excludes already reviewed items, and samples based on percentage.
         """
@@ -46,6 +46,7 @@ class DataManager:
         
         # 2. Load already reviewed data to exclude
         reviewed_contents = set()
+        reviewed_items = []
         if os.path.exists(processed_path):
             with open(processed_path, 'r') as f:
                 for line in f:
@@ -55,6 +56,8 @@ class DataManager:
                         user_msg = next((m["content"] for m in msgs if m["role"] == "user"), None)
                         if user_msg:
                             reviewed_contents.add(user_msg)
+                            if include_reviewed:
+                                reviewed_items.append(rev_entry)
                     except:
                         pass
         
@@ -70,7 +73,13 @@ class DataManager:
         else:
             sampled_data = random.sample(unreviewed_data, len(unreviewed_data)) 
 
-        return sampled_data, len(data), len(reviewed_contents)
+        # 5. Merge if requested
+        if include_reviewed:
+            final_queue = reviewed_items + sampled_data
+        else:
+            final_queue = sampled_data
+
+        return final_queue, len(data), len(reviewed_contents)
 
     @staticmethod
     def get_label_stats(processed_path):
@@ -140,19 +149,35 @@ class DataManager:
         return pd.DataFrame()
 
     @staticmethod
-    def save_entry(entry, label, corrected_answer, original_entry, processed_path):
+    def save_entry(entry, label, corrected_answer, original_entry, processed_path, save_format="Multi-turn Dialog"):
         """
-        Appends the reviewed entry to the processed file.
+        Appends the reviewed entry to the processed file, converting format if needed.
         """
+        # Update content first (in standard multi-turn structure)
         entry["messages"][1]["content"] = corrected_answer
         
+        # Add metadata
         entry["review_metadata"] = {
             "status": "checked",
             "label": label,
-            "timestamp": time.time()
+            "timestamp": time.time(),
+            "format": save_format
         }
+        
+        # Convert if needed
+        output_entry = entry
+        if save_format == "Alpaca":
+            user_msg = next((m["content"] for m in entry["messages"] if m["role"] == "user"), "")
+            asst_msg = entry["messages"][1]["content"] # Already updated above
+            output_entry = {
+                "instruction": user_msg,
+                "input": "",
+                "output": asst_msg,
+                "review_metadata": entry["review_metadata"],
+                "original_meta": entry.get("original_meta", {})
+            }
         
         os.makedirs(os.path.dirname(processed_path), exist_ok=True)
         
         with open(processed_path, 'a') as f:
-            f.write(json.dumps(entry) + "\n")
+            f.write(json.dumps(output_entry) + "\n")

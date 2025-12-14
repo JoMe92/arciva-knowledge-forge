@@ -18,7 +18,7 @@ def render_review_screen(project):
     if mode == "Overview":
         render_overview(project, current_raw_path, current_processed_path)
     elif mode == "Review":
-        render_review_session(current_raw_path, current_processed_path)
+        render_review_session(project, current_raw_path, current_processed_path)
 
 def render_overview(project, raw_path, processed_path):
     st.header("Project Model Card")
@@ -74,7 +74,7 @@ def render_overview(project, raw_path, processed_path):
     else:
         st.info("No data found.")
 
-def render_review_session(raw_path, processed_path):
+def render_review_session(project, raw_path, processed_path):
     inject_shortcuts()
     
     if len(st.session_state['data_queue']) > 0 and st.session_state['current_index'] < len(st.session_state['data_queue']):
@@ -118,10 +118,12 @@ def render_review_session(raw_path, processed_path):
                 
             col1, col2 = st.columns([1, 1])
             
+            save_format = project.get("save_format", "Multi-turn Dialog")
+            
             # Discard Logic
             with col1:
                 if st.button("🗑️ Discard Pair (Ctrl+Shift+Del)", type="secondary", width="stretch", help="Shortcut: Ctrl + Shift + Backspace/Delete"):
-                     DataManager.save_entry(item, "🗑️ Discarded", new_answer, item, processed_path) 
+                     DataManager.save_entry(item, "🗑️ Discarded", new_answer, item, processed_path, save_format=save_format) 
                      st.session_state['current_index'] += 1
                      st.session_state['reviews_this_session'] += 1
                      st.rerun()
@@ -129,7 +131,7 @@ def render_review_session(raw_path, processed_path):
             # Save/Next Logic
             with col2:
                 if st.button("Confirm & Next ➡️ (Shift+Enter)", type="primary", width="stretch", help="Shortcut: Shift + Enter"):
-                    DataManager.save_entry(item, current_status, new_answer, item, processed_path)
+                    DataManager.save_entry(item, current_status, new_answer, item, processed_path, save_format=save_format)
                     st.session_state['current_index'] += 1
                     st.session_state['reviews_this_session'] += 1
                     st.rerun()
