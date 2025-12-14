@@ -34,11 +34,7 @@ def render_sidebar(project):
         # Only show if queue is empty or reset requested
         if len(st.session_state['data_queue']) == 0:
             sample_pct = st.slider("Sample Size (%)", 1, 100, 10)
-            full_dataset = st.checkbox("Full Dataset (100%)")
             include_reviewed = st.checkbox("Include previously labeled data", help="Include already verified items in the session (will be skipped/marked as done).")
-            
-            if full_dataset:
-                sample_pct = 100
             
             if st.button("Load Session"):
                 queue, total_avail, total_reviewed = DataManager.load_data(current_raw_path, current_processed_path, sample_pct/100.0, include_reviewed=include_reviewed)
