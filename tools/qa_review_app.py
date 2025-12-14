@@ -1,5 +1,6 @@
 
 import streamlit as st
+import pandas as pd
 import json
 import random
 import os
@@ -111,6 +112,55 @@ def get_label_stats():
                     pass
     return stats, total
 
+def get_overview_data(raw_path, processed_path):
+    """
+    Merges raw and processed data to pivot a full status view.
+    """
+    # 1. Load Raw
+    raw_items = []
+    if os.path.exists(raw_path):
+        with open(raw_path, 'r') as f:
+            for line in f:
+                try:
+                    d = json.loads(line)
+                    fmt = ensure_messages_format(d)
+                    if fmt:
+                        q = next((m["content"] for m in fmt["messages"] if m["role"] == "user"), "")
+                        raw_items.append({"Question": q, "Raw_Entry": fmt})
+                except: pass
+    
+    df_raw = pd.DataFrame(raw_items)
+    
+    # 2. Load Processed
+    proc_items = []
+    if os.path.exists(processed_path):
+        with open(processed_path, 'r') as f:
+            for line in f:
+                try:
+                    d = json.loads(line)
+                    q = next((m["content"] for m in d["messages"] if m["role"] == "user"), "")
+                    meta = d.get("review_metadata", {})
+                    status = meta.get("label", "⚠️ Unknown") # e.g. "✅ Verified"
+                    proc_items.append({"Question": q, "Status": status, "Reviewed_Entry": d})
+                except: pass
+                
+    df_proc = pd.DataFrame(proc_items)
+    
+    # 3. Merge
+    if not df_raw.empty:
+        if not df_proc.empty:
+            # Drop duplicates in processed if any (take latest)
+             df_proc = df_proc.drop_duplicates(subset=["Question"], keep="last")
+             df_merged = pd.merge(df_raw, df_proc, on="Question", how="left")
+        else:
+            df_merged = df_raw
+            df_merged["Status"] = None
+            
+        # Fill Pending
+        df_merged["Status"] = df_merged["Status"].fillna("⏳ Pending")
+        return df_merged
+    return pd.DataFrame()
+
 def save_entry(entry, label, corrected_answer, original_entry):
     """
     Appends the reviewed entry to the processed file.
@@ -208,77 +258,128 @@ with st.sidebar:
         st.write("Load data to start.")
 
 # --- MAIN AREA ---
+# View Switching
+mode = st.sidebar.radio("View Mode", ["Review", "Overview"], index=0)
+
 st.title("Arciva Dataset Review Tool")
 
-if len(st.session_state['data_queue']) > 0 and st.session_state['current_index'] < len(st.session_state['data_queue']):
+if mode == "Overview":
+    st.header("Dataset Overview")
     
-    # Get current item
-    item = st.session_state['data_queue'][st.session_state['current_index']]
+    input_p = st.session_state.get('input_path_cache', RAW_DATA_PATH) 
+    # Use cached input path from session if available (though st.text_input in sidebar usually drives it)
+    # Actually, we need to read the current text_input value. 
+    # But sidebar is rendered above. Let's just use the variable we defined if possible, 
+    # or re-read from session state if keys match.
+    # Limitation: input_path variable scope.
+    # Fix: Store input_path in session state in the sidebar callback or just access it if key is set?
+    # Better: Re-read the default. Or better, `load_data` updates a session var.
     
-    # Extract Q & A
-    # Assuming standard structure [User, Assistant]
-    user_msg = next((m for m in item["messages"] if m["role"] == "user"), None)
-    asst_msg = next((m for m in item["messages"] if m["role"] == "assistant"), None)
+    df = get_overview_data(RAW_DATA_PATH, PROCESSED_DATA_PATH) # Simplified: Using constants for now or we need to wire up the input
     
-    if not user_msg or not asst_msg:
-        st.error("Invalid message format in current item.")
-        # helper to skip
-        if st.button("Skip Invalid"):
-            st.session_state['current_index'] += 1
+    if not df.empty:
+        # Stats
+        st.markdown("### Statistics")
+        c1, c2, c3, c4 = st.columns(4)
+        c1.metric("Total Pairs", len(df))
+        c2.metric("Verified", len(df[df["Status"].str.contains("Verified")]))
+        c3.metric("Modified", len(df[df["Status"].str.contains("Modified")]))
+        c4.metric("Pending", len(df[df["Status"].str.contains("Pending")]))
+        
+        # Color Styling
+        def highlight_status(val):
+            color = ''
+            if 'Verified' in val: color = 'background-color: #d4edda; color: #155724' # Green
+            elif 'Modified' in val: color = 'background-color: #cce5ff; color: #004085' # Blue
+            elif 'Discarded' in val: color = 'background-color: #f8d7da; color: #721c24' # Red
+            elif 'Pending' in val: color = 'background-color: #fff3cd; color: #856404' # Yellow
+            return color
+
+        st.markdown("### Data Browser")
+        st.dataframe(
+            df[["Question", "Status"]], 
+            use_container_width=True,
+            height=600,
+            column_config={
+                "Status": st.column_config.TextColumn("Status", help="Current review status")
+            }
+        ) # styling via pandas styler is possible but `st.dataframe` is simpler for now. 
+        # Advanced: st.dataframe(df.style.map(highlight_status, subset=['Status'])) 
+        # But let's stick to simple first to ensure robustness.
+        
+    else:
+        st.info("No data found.")
+
+elif mode == "Review":
+    if len(st.session_state['data_queue']) > 0 and st.session_state['current_index'] < len(st.session_state['data_queue']):
+        
+        # Get current item
+        item = st.session_state['data_queue'][st.session_state['current_index']]
+        
+        # Extract Q & A
+        # Assuming standard structure [User, Assistant]
+        user_msg = next((m for m in item["messages"] if m["role"] == "user"), None)
+        asst_msg = next((m for m in item["messages"] if m["role"] == "assistant"), None)
+        
+        if not user_msg or not asst_msg:
+            st.error("Invalid message format in current item.")
+            # helper to skip
+            if st.button("Skip Invalid"):
+                st.session_state['current_index'] += 1
+                st.rerun()
+        else:
+            # Display User Question
+            with st.chat_message("user"):
+                st.write(user_msg["content"])
+                
+            # Display Assistant Answer (Editable)
+            with st.chat_message("assistant"):
+                new_answer = st.text_area(
+                    "Edit Answer:", 
+                    value=asst_msg["content"], 
+                    height=300,
+                    key=f"answer_{st.session_state['current_index']}", # Unique key per item
+                    on_change=lambda: None # Force rerun on blur
+                )
+                
+            # Review Controls
+            st.markdown("### verification")
+            
+            if new_answer != asst_msg["content"]:
+                current_status = "✍️ Modified"
+                st.info("Status: **Modified** (Changes detected)")
+            else:
+                current_status = "✅ Verified"
+                st.success("Status: **Verified** (No changes)")
+                
+            col1, col2 = st.columns([1, 1])
+            
+            # Discard Logic
+            with col1:
+                if st.button("🗑️ Discard Pair", type="secondary", use_container_width=True):
+                     save_entry(item, "🗑️ Discarded", new_answer, item) # Save as discarded
+                     st.session_state['current_index'] += 1
+                     st.session_state['reviews_this_session'] += 1
+                     st.rerun()
+    
+            # Save/Next Logic
+            with col2:
+                # We combine "Next" and "Save" into one primary action
+                # Requirement: "The user should also have the option to close pairs completely" -> Done via Discard/Save
+                # "that should then also be tracked" -> Done via save_entry
+                
+                if st.button("Confirm & Next ➡️", type="primary", use_container_width=True):
+                    save_entry(item, current_status, new_answer, item)
+                    st.session_state['current_index'] += 1
+                    st.session_state['reviews_this_session'] += 1
+                    st.rerun()
+                
+    elif len(st.session_state['data_queue']) > 0:
+        st.success("Session Complete! 🎉")
+        st.balloons()
+        if st.button("Start New Session"):
+            st.session_state['data_queue'] = []
             st.rerun()
     else:
-        # Display User Question
-        with st.chat_message("user"):
-            st.write(user_msg["content"])
-            
-        # Display Assistant Answer (Editable)
-        with st.chat_message("assistant"):
-            new_answer = st.text_area(
-                "Edit Answer:", 
-                value=asst_msg["content"], 
-                height=300,
-                key=f"answer_{st.session_state['current_index']}", # Unique key per item
-                on_change=lambda: None # Force rerun on blur
-            )
-            
-        # Review Controls
-        st.markdown("### verification")
-        
-        if new_answer != original_answer:
-            current_status = "✍️ Modified"
-            st.info("Status: **Modified** (Changes detected)")
-        else:
-            current_status = "✅ Verified"
-            st.success("Status: **Verified** (No changes)")
-            
-        col1, col2 = st.columns([1, 1])
-        
-        # Discard Logic
-        with col1:
-            if st.button("🗑️ Discard Pair", type="secondary", use_container_width=True):
-                 save_entry(item, "🗑️ Discarded", new_answer, item) # Save as discarded
-                 st.session_state['current_index'] += 1
-                 st.session_state['reviews_this_session'] += 1
-                 st.rerun()
-
-        # Save/Next Logic
-        with col2:
-            # We combine "Next" and "Save" into one primary action
-            # Requirement: "The user should also have the option to close pairs completely" -> Done via Discard/Save
-            # "that should then also be tracked" -> Done via save_entry
-            
-            if st.button("Confirm & Next ➡️", type="primary", use_container_width=True):
-                save_entry(item, current_status, new_answer, item)
-                st.session_state['current_index'] += 1
-                st.session_state['reviews_this_session'] += 1
-                st.rerun()
-            
-elif len(st.session_state['data_queue']) > 0:
-    st.success("Session Complete! 🎉")
-    st.balloons()
-    if st.button("Start New Session"):
-        st.session_state['data_queue'] = []
-        st.rerun()
-else:
-    st.info("👈 Please load data from the sidebar.")
+        st.info("👈 Please load data from the sidebar.")
 
