@@ -296,8 +296,30 @@ if mode == "Overview":
             return color
 
         st.markdown("### Data Browser")
+        
+        # Filters
+        f_col1, f_col2 = st.columns([1, 2])
+        with f_col1:
+            status_filter = st.multiselect(
+                "Filter by Status", 
+                options=["Verified", "Modified", "Discarded", "Pending"],
+                default=[]
+            )
+        with f_col2:
+            search_query = st.text_input("Search Question", placeholder="Type keywords...")
+            
+        # Apply Filters
+        df_display = df.copy()
+        if status_filter:
+            # Flexible filtering matches partial string (e.g. "Verified" matches "✅ Verified")
+            pattern = "|".join(status_filter)
+            df_display = df_display[df_display["Status"].str.contains(pattern, na=False)]
+            
+        if search_query:
+            df_display = df_display[df_display["Question"].str.contains(search_query, case=False, na=False)]
+
         st.dataframe(
-            df[["Question", "Status"]], 
+            df_display[["Question", "Status"]], 
             use_container_width=True,
             height=600,
             column_config={
