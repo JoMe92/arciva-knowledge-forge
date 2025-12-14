@@ -4,6 +4,7 @@ import json
 import random
 import pandas as pd
 import time
+from .dvc_utils import resolve_dvc_path
 
 class DataManager:
     @staticmethod
@@ -29,6 +30,10 @@ class DataManager:
         """
         Loads data, excludes already reviewed items, and samples based on percentage.
         """
+        # Resolve DVC paths if necessary
+        raw_path = resolve_dvc_path(raw_path)
+        processed_path = resolve_dvc_path(processed_path)
+        
         data = []
         if not os.path.exists(raw_path):
             return [], 0, 0
@@ -103,6 +108,7 @@ class DataManager:
     @staticmethod
     def get_label_stats(processed_path):
         """Calculates label distribution from the processed file."""
+        processed_path = resolve_dvc_path(processed_path)
         stats = {"✅ Verified": 0, "✍️ Modified": 0, "🗑️ Discarded": 0}
         total = 0
         if os.path.exists(processed_path):
@@ -127,6 +133,9 @@ class DataManager:
         """
         Merges raw and processed data to pivot a full status view.
         """
+        raw_path = resolve_dvc_path(raw_path)
+        processed_path = resolve_dvc_path(processed_path)
+        
         raw_items = []
         if os.path.exists(raw_path):
             with open(raw_path, 'r') as f:
@@ -172,6 +181,8 @@ class DataManager:
         """
         Appends the reviewed entry to the processed file, converting format if needed.
         """
+        processed_path = resolve_dvc_path(processed_path)
+        
         # Update content first (in standard multi-turn structure)
         entry["messages"][1]["content"] = corrected_answer
         
