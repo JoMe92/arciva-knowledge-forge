@@ -1,3 +1,10 @@
+import sys
+import os
+
+# Ensure the current directory (tools/labeling_tool) is in path so we can import 'managers', 'ui', etc.
+current_dir = os.path.dirname(os.path.abspath(__file__))
+if current_dir not in sys.path:
+    sys.path.insert(0, current_dir)
 
 import streamlit as st
 from managers.project import ProjectManager

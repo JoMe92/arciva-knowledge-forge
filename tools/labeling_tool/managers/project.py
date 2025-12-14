@@ -7,7 +7,7 @@ import shutil
 from datetime import datetime
 
 class ProjectManager:
-    def __init__(self, filepath="data/projects.json"):
+    def __init__(self, filepath="tools/labeling_tool/db/projects.json"):
         self.filepath = filepath
         self.ensure_file_exists()
 

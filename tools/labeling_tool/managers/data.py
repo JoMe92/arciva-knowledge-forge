@@ -34,17 +34,31 @@ class DataManager:
         raw_path = resolve_dvc_path(raw_path)
         processed_path = resolve_dvc_path(processed_path)
         
+        # Fallback: If processed path is missing, we assume "edit in place" logic 
+        # but for loading "already reviewed", if it's the SAME file, we need to be careful.
+        # However, typically processed_path should be set to raw_path in the project config if it was empty.
+        # If it is still None here, treat it as "no separate processed file" (so effective processed path is raw_path)
+        if not processed_path and raw_path:
+            processed_path = raw_path
+
         data = []
-        if not os.path.exists(raw_path):
+        if not raw_path or not os.path.exists(raw_path):
             return [], 0, 0
+
 
         # 1. Load all raw data
         with open(raw_path, 'r') as f:
-            for line in f:
+            for idx, line in enumerate(f):
                 try:
                     line_data = json.loads(line)
+                    # Detect original format
+                    orig_fmt = "alpaca" if "instruction" in line_data and "output" in line_data else "messages"
+                    
                     formatted = DataManager.ensure_messages_format(line_data)
                     if formatted:
+                        # Store internal metadata for in-place editing
+                        formatted["_line_index"] = idx
+                        formatted["_original_format"] = orig_fmt
                         data.append(formatted)
                 except json.JSONDecodeError:
                     continue
@@ -109,6 +123,9 @@ class DataManager:
     def get_label_stats(processed_path):
         """Calculates label distribution from the processed file."""
         processed_path = resolve_dvc_path(processed_path)
+        if not processed_path:
+             return {"✅ Verified": 0, "✍️ Modified": 0, "🗑️ Discarded": 0}, 0
+
         stats = {"✅ Verified": 0, "✍️ Modified": 0, "🗑️ Discarded": 0}
         total = 0
         if os.path.exists(processed_path):
@@ -136,8 +153,12 @@ class DataManager:
         raw_path = resolve_dvc_path(raw_path)
         processed_path = resolve_dvc_path(processed_path)
         
+        # Fallback for edit-in-place
+        if not processed_path:
+            processed_path = raw_path
+
         raw_items = []
-        if os.path.exists(raw_path):
+        if raw_path and os.path.exists(raw_path):
             with open(raw_path, 'r') as f:
                 for line in f:
                     try:
@@ -151,7 +172,7 @@ class DataManager:
         df_raw = pd.DataFrame(raw_items)
         
         proc_items = []
-        if os.path.exists(processed_path):
+        if processed_path and os.path.exists(processed_path):
             with open(processed_path, 'r') as f:
                 for line in f:
                     try:
@@ -179,14 +200,17 @@ class DataManager:
     @staticmethod
     def save_entry(entry, label, corrected_answer, original_entry, processed_path, save_format="Multi-turn Dialog"):
         """
-        Appends the reviewed entry to the processed file, converting format if needed.
+        Updates the entry IN-PLACE in the processed file (which is often the raw file).
+        Preserves original schema (Alpaca vs Messages).
         """
         processed_path = resolve_dvc_path(processed_path)
+        if not processed_path:
+             raise ValueError("No processed path available for saving.")
         
-        # Update content first (in standard multi-turn structure)
+        # 1. Update content in the working 'messages' format
         entry["messages"][1]["content"] = corrected_answer
         
-        # Add metadata
+        # 2. Add metadata
         entry["review_metadata"] = {
             "status": "checked",
             "label": label,
@@ -194,20 +218,53 @@ class DataManager:
             "format": save_format
         }
         
-        # Convert if needed
+        # 3. Determine output format based on loaded metadata
+        # If we know the original format was 'alpaca', we try to convert back to respect it.
+        # Otherwise fall back to 'messages' or the requested save_format.
+        orig_fmt = entry.get("_original_format", "messages")
+        
         output_entry = entry
-        if save_format == "Alpaca":
+        if orig_fmt == "alpaca":
             user_msg = next((m["content"] for m in entry["messages"] if m["role"] == "user"), "")
-            asst_msg = entry["messages"][1]["content"] # Already updated above
+            asst_msg = entry["messages"][1]["content"] 
             output_entry = {
                 "instruction": user_msg,
-                "input": "",
+                "input": "", # We might lose input if not preserved in original meta, but usually covered
                 "output": asst_msg,
                 "review_metadata": entry["review_metadata"],
-                "original_meta": entry.get("original_meta", {})
             }
+            # Merge back any other original keys safely
+            orig_meta = entry.get("original_meta", {})
+            for k, v in orig_meta.items():
+                if k not in output_entry:
+                    output_entry[k] = v
+        else:
+            # Default/Messages format
+            # ensure we don't save our internal underscored keys
+            output_entry = {k:v for k,v in entry.items() if not k.startswith('_')}
+
+        # 4. In-Place Write
+        # We need to read all lines, replace the specific line, and write back.
+        if not os.path.exists(processed_path):
+             # Should not happen for in-place edit of existing file
+             with open(processed_path, 'a') as f:
+                f.write(json.dumps(output_entry) + "\n")
+             return
+
+        # Read all
+        with open(processed_path, 'r') as f:
+            lines = f.readlines()
+            
+        target_idx = entry.get("_line_index")
         
-        os.makedirs(os.path.dirname(processed_path), exist_ok=True)
-        
-        with open(processed_path, 'a') as f:
-            f.write(json.dumps(output_entry) + "\n")
+        if target_idx is not None and 0 <= target_idx < len(lines):
+            # Verify we are overwriting the correct thing (optional: regex check or partial match)
+            # For now trust the index since we just loaded it.
+            lines[target_idx] = json.dumps(output_entry) + "\n"
+        else:
+            # Fallback if index missing or out of bounds (e.g. file changed externally): Append
+            lines.append(json.dumps(output_entry) + "\n")
+            
+        # Write all back
+        with open(processed_path, 'w') as f:
+            f.writelines(lines)

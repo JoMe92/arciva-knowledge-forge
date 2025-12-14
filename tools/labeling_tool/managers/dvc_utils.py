@@ -7,6 +7,9 @@ def resolve_dvc_path(path: str) -> str:
     the tracked file path. Returns the absolute path to the actual data file.
     If not a .dvc file or parsing fails, returns the original path.
     """
+    if path is None:
+        return None
+        
     if not path or not path.endswith('.dvc'):
         return path
 

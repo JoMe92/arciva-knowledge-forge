@@ -2,6 +2,7 @@
 import streamlit as st
 import json
 import pandas as pd
+# Explicit import
 from managers.data import DataManager
 from ui.components import inject_shortcuts
 
@@ -9,6 +10,10 @@ def render_review_screen(project):
     # Paths from Project Config
     current_raw_path = project.get("raw_data_path")
     current_processed_path = project.get("processed_data_path")
+    
+    # Fallback to Raw Path if Processed Path is not specified (Edit-in-Place)
+    if not current_processed_path:
+        current_processed_path = current_raw_path
 
     # View Switching
     mode = st.sidebar.radio("View Mode", ["Review", "Overview"], index=0)
