@@ -64,19 +64,38 @@ class DataManager:
         # 3. Filter
         unreviewed_data = [d for d in data if d["messages"][0]["content"] not in reviewed_contents]
         
-        # 4. Sample
-        if limit_pct < 1.0:
-            sample_size = int(len(unreviewed_data) * limit_pct)
-            if len(unreviewed_data) > 0 and sample_size == 0:
-                sample_size = 1
-            sampled_data = random.sample(unreviewed_data, sample_size)
-        else:
-            sampled_data = random.sample(unreviewed_data, len(unreviewed_data)) 
+        # 4. Calculate Sampling
+        sampled_data = []
 
-        # 5. Merge if requested
         if include_reviewed:
+            # Inclusive logic: "10%" means "10% of total data should be in the session".
+            # The session will contain ALL reviewed data + (Target - Reviewed) new data.
+            # If Reviewed > Target, we still return all reviewed (or should we cap it? User said "all previously labeled... included").
+            # Let's pivot to: The slider is "Additional New Data" or "Total Session Size"?
+            # User said: "die 10 sollen inkulsive ebreties gelabelter daten sien" -> "The 10 [%] should be inclusive of already labeled data".
+            
+            total_count_target = int(len(data) * limit_pct)
+            current_reviewed_count = len(reviewed_items)
+            needed_new_count = total_count_target - current_reviewed_count
+            
+            if needed_new_count > 0:
+                safe_count = min(needed_new_count, len(unreviewed_data))
+                sampled_data = random.sample(unreviewed_data, safe_count)
+            else:
+                sampled_data = [] # Target already met/exceeded by reviewed items
+                
             final_queue = reviewed_items + sampled_data
+            
         else:
+            # Exclusive logic (Default): "10%" means "10% of unreviewed data".
+            if limit_pct < 1.0:
+                sample_size = int(len(unreviewed_data) * limit_pct)
+                if len(unreviewed_data) > 0 and sample_size == 0:
+                    sample_size = 1
+                sampled_data = random.sample(unreviewed_data, sample_size)
+            else:
+                sampled_data = random.sample(unreviewed_data, len(unreviewed_data)) 
+            
             final_queue = sampled_data
 
         return final_queue, len(data), len(reviewed_contents)
