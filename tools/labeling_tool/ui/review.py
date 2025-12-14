@@ -33,15 +33,82 @@ def render_overview(project, raw_path, processed_path):
     df = DataManager.get_overview_data(raw_path, processed_path)
     
     if not df.empty:
-        # Stats
-        st.markdown("### Statistics")
-        c1, c2, c3, c4 = st.columns(4)
-        c1.metric("Total Pairs", len(df))
-        c2.metric("Verified", len(df[df["Status"].str.contains("Verified")]))
-        c3.metric("Modified", len(df[df["Status"].str.contains("Modified")]))
-        c4.metric("Pending", len(df[df["Status"].str.contains("Pending")]))
+        # --- Metrics & Progress ---
+        total = len(df)
+        verified = len(df[df["Status"].str.contains("Verified", na=False)])
+        modified = len(df[df["Status"].str.contains("Modified", na=False)])
+        discarded = len(df[df["Status"].str.contains("Discarded", na=False)])
+        pending = len(df[df["Status"].str.contains("Pending", na=False)])
         
-        st.markdown("### Data Browser")
+        completed = verified + modified + discarded
+        pct_complete = (completed / total) if total > 0 else 0
+        
+        st.markdown(f"### Overall Progress: {int(pct_complete*100)}%")
+        st.progress(pct_complete)
+        
+        m1, m2, m3, m4, m5 = st.columns(5)
+        m1.metric("Total Items", total)
+        m2.metric("✅ Verified", verified)
+        m3.metric("✍️ Modified", modified)
+        m4.metric("🗑️ Discarded", discarded)
+        m5.metric("⏳ Pending", pending)
+        
+        st.markdown("---")
+        
+        # --- Visualizations ---
+        st.subheader("📈 Analytics")
+        
+        # 1. Label Distribution
+        st.markdown("**Label Distribution**")
+        status_counts = df["Status"].value_counts()
+        st.bar_chart(status_counts)
+        
+        # 2. Length Analysis
+        st.markdown("**Message Length Analysis**")
+        
+        # Helper to safely get lengths
+        def get_lengths(row):
+            # Try getting from Reviewed Entry first
+            entry = row.get("Reviewed_Entry")
+            if not isinstance(entry, dict) or not entry:
+                entry = row.get("Raw_Entry")
+            
+            u_len = 0
+            a_len = 0
+            if isinstance(entry, dict):
+                msgs = entry.get("messages", [])
+                u_content = next((m.get("content", "") for m in msgs if m.get("role") == "user"), "")
+                a_content = next((m.get("content", "") for m in msgs if m.get("role") == "assistant"), "")
+                u_len = len(u_content) if u_content else 0
+                a_len = len(a_content) if a_content else 0
+            return pd.Series([u_len, a_len])
+
+        length_df = df.apply(get_lengths, axis=1)
+        length_df.columns = ["User Input", "Assistant Output"]
+        st.line_chart(length_df)
+        
+        # 3. Time Series (if available)
+        # Extract timestamps from reviewed entries
+        timestamps = []
+        for _, row in df.iterrows():
+            entry = row.get("Reviewed_Entry")
+            if isinstance(entry, dict):
+                meta = entry.get("review_metadata", {})
+                ts = meta.get("timestamp")
+                if ts:
+                    timestamps.append(ts)
+        
+        if timestamps:
+            st.markdown("**Review Activity**")
+            ts_df = pd.DataFrame({"Timestamp": pd.to_datetime(timestamps, unit='s')})
+            ts_df["Count"] = 1
+            ts_df.set_index("Timestamp", inplace=True)
+            # Resample to Hour or Minute depending on density
+            activity = ts_df.resample('h').sum()
+            st.bar_chart(activity)
+
+        st.markdown("---")
+        st.header("Data Browser")
         
         # Filters
         f_col1, f_col2 = st.columns([1, 2])
