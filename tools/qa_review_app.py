@@ -257,6 +257,73 @@ with st.sidebar:
     else:
         st.write("Load data to start.")
 
+    st.markdown("---")
+    st.title("💾 Export")
+    
+    export_option = st.selectbox(
+        "Export Type",
+        ["Training Ready (Verified + Modified)", "Verified Only", "All Reviewed", "Full Dataset (Merged)"]
+    )
+    
+    if st.button("Prepare Download", width="stretch"): # Replaced deprecated arg
+        # Logic to prepare data
+        jsonl_str = ""
+        file_name = "export.jsonl"
+        
+        if "Full Dataset" in export_option:
+            df_exp = get_overview_data(RAW_DATA_PATH, PROCESSED_DATA_PATH)
+            # Prioritize Reviewed Entry, fallback to Raw
+            lines = []
+            for _, row in df_exp.iterrows():
+                entry = row.get("Reviewed_Entry")
+                if pd.isna(entry) or not entry:
+                     entry = row.get("Raw_Entry")
+                if entry and not pd.isna(entry):
+                    lines.append(json.dumps(entry))
+            jsonl_str = "\n".join(lines)
+            file_name = "arciva_qa_full_merged.jsonl"
+            
+        else:
+            # Reviewed data based
+            valid_stats = []
+            if "Training Ready" in export_option:
+                valid_stats = ["Verified", "Modified"]
+                file_name = "arciva_qa_training_ready.jsonl"
+            elif "Verified Only" in export_option:
+                valid_stats = ["Verified"]
+                file_name = "arciva_qa_verified_only.jsonl"
+            elif "All Reviewed" in export_option:
+                valid_stats = ["Verified", "Modified", "Discarded"] # All types
+                file_name = "arciva_qa_all_reviews.jsonl"
+                
+            lines = []
+            if os.path.exists(PROCESSED_DATA_PATH):
+                with open(PROCESSED_DATA_PATH, 'r') as f:
+                    for line in f:
+                        try:
+                            d = json.loads(line)
+                            meta = d.get("review_metadata", {})
+                            label = meta.get("label", "")
+                            
+                            # Check if label matches any of our valid stats keywords
+                            if any(s in label for s in valid_stats):
+                                lines.append(line.strip())
+                        except: pass
+            jsonl_str = "\n".join(lines)
+            
+        # Download Button
+        if jsonl_str:
+            st.download_button(
+                label="⬇️ Download JSONL",
+                data=jsonl_str,
+                file_name=file_name,
+                mime="application/jsonl",
+                width="stretch"
+            )
+            st.success(f"Prepared {len(lines)} items.")
+        else:
+            st.warning("No matching data found.")
+
 # --- MAIN AREA ---
 # View Switching
 mode = st.sidebar.radio("View Mode", ["Review", "Overview"], index=0)
@@ -320,7 +387,7 @@ if mode == "Overview":
 
         st.dataframe(
             df_display[["Question", "Status"]], 
-            use_container_width=True,
+            width="stretch",
             height=600,
             column_config={
                 "Status": st.column_config.TextColumn("Status", help="Current review status")
@@ -378,7 +445,7 @@ elif mode == "Review":
             
             # Discard Logic
             with col1:
-                if st.button("🗑️ Discard Pair", type="secondary", use_container_width=True):
+                if st.button("🗑️ Discard Pair", type="secondary", width="stretch"):
                      save_entry(item, "🗑️ Discarded", new_answer, item) # Save as discarded
                      st.session_state['current_index'] += 1
                      st.session_state['reviews_this_session'] += 1
@@ -390,7 +457,7 @@ elif mode == "Review":
                 # Requirement: "The user should also have the option to close pairs completely" -> Done via Discard/Save
                 # "that should then also be tracked" -> Done via save_entry
                 
-                if st.button("Confirm & Next ➡️", type="primary", use_container_width=True):
+                if st.button("Confirm & Next ➡️", type="primary", width="stretch"):
                     save_entry(item, current_status, new_answer, item)
                     st.session_state['current_index'] += 1
                     st.session_state['reviews_this_session'] += 1
