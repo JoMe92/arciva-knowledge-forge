@@ -1,0 +1,31 @@
+[workspace]
+authors = ["jome92 <jonasmeier@posteo.de>"]
+channels = ["conda-forge"]
+name = "arciva-knowledge-forge"
+platforms = ["linux-64"]
+version = "0.1.0"
+
+[tasks]
+dev = "streamlit run tools/labeling_tool/main.py"
+train = "python finetune.py"
+docker-build = "docker build -t arciva-trainer-local ."
+
+
+
+[dependencies]
+streamlit = ">=1.52.1,<2"
+pandas = ">=2.3.3,<3"
+dvc-gs = ">=3.0.2,<4"
+pyyaml = ">=6.0.3,<7"
+
+[pypi-dependencies]
+torch = ">=2.9.1, <3"
+transformers = ">=4.57.3, <5"
+peft = ">=0.18.0, <0.19"
+trl = ">=0.26.1, <0.27"
+bitsandbytes = ">=0.49.0, <0.50"
+accelerate = ">=1.12.0, <2"
+wandb = ">=0.23.1, <0.24"
+dvc = { version = ">=3.64.2, <4", extras = ["gcs"] }
+datasets = ">=2.14.0"
+

@@ -1,0 +1,10 @@
+transformers
+peft
+trl
+bitsandbytes
+accelerate
+wandb
+torch
+scipy
+datasets
+google-cloud-storage

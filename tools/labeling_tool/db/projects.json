@@ -1,0 +1,21 @@
+{
+    "projects": {
+        "81167e85-4578-432e-a662-228e6276ed7e": {
+            "name": "arciva",
+            "description": "",
+            "created_at": 1765726353.8117063,
+            "last_accessed": 1765733577.3366942,
+            "raw_data_path": "data/raw/arciva_qa_synthetic.jsonl",
+            "processed_data_path": "data/processed/arciva_qa_reviewed.jsonl",
+            "status": "New",
+            "save_format": "Multi-turn Dialog"
+        },
+        "97e0b785-5278-4ec0-9740-e1946dc6e15a": {
+            "name": "arciva dvc",
+            "description": "",
+            "created_at": 1765739488.0567002,
+            "last_accessed": 1765740338.3406677,
+            "raw_data_path": "data/raw/arciva_qa_synthetic.jsonl.dvc"
+        }
+    }
+}

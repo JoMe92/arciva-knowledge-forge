@@ -1,0 +1,5 @@
+outs:
+- md5: 1c4f7907adb51539be371e76d8051112
+  size: 228015
+  hash: md5
+  path: arciva_qa_synthetic.jsonl
