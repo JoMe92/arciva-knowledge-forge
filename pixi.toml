@@ -8,6 +8,8 @@ version = "0.1.0"
 [tasks]
 dev = "streamlit run tools/labeling_tool/main.py"
 train = "python finetune.py"
+docker-build = "docker build -t arciva-trainer-local ."
+
 
 
 [dependencies]
