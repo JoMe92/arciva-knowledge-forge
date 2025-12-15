@@ -4,7 +4,6 @@ trl
 bitsandbytes
 accelerate
 wandb
-dvc[gcs]
 torch
 scipy
 datasets

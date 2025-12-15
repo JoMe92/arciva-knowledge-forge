@@ -1,0 +1,21 @@
+# 1. GCP-optimiertes Basis-Image verwenden (ersetzt Ihr Docker Hub Image)
+# Dieses Image ist für Vertex AI vorkonfiguriert
+FROM us-docker.pkg.dev/deeplearning-platform-release/pytorch-gpu.2-1.py310
+
+# 2. Arbeitsverzeichnis setzen
+WORKDIR /app
+
+# 3. System-Dependencies installieren
+RUN apt-get update && apt-get install -y \
+    git \
+    && rm -rf /var/lib/apt/lists/*
+
+# 4. Python-Dependencies installieren
+COPY requirements_gcp.txt .
+RUN pip install --no-cache-dir -r requirements_gcp.txt
+
+# 5. Trainingsskript kopieren
+COPY finetune_gcp.py .
+
+# 6. Entrypoint festlegen (Startbefehl)
+ENTRYPOINT ["python", "finetune_gcp.py"]
