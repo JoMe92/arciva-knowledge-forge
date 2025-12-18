@@ -7,7 +7,7 @@ version = "0.1.0"
 
 [tasks]
 dev = "streamlit run tools/labeling_tool/main.py"
-train = "python finetune.py"
+train = "python train_arciva_assistant_local.py"
 docker-build = "docker build -t arciva-trainer-local ."
 
 
@@ -28,4 +28,3 @@ accelerate = ">=1.12.0, <2"
 wandb = ">=0.23.1, <0.24"
 dvc = { version = ">=3.64.2, <4", extras = ["gcs"] }
 datasets = ">=2.14.0"
-
