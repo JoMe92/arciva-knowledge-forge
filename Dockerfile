@@ -29,4 +29,4 @@ COPY . .
 ENV DVC_NO_ANALYTICS=1
 
 # Default command
-CMD ["python", "finetune.py"]
+CMD ["python", "train_arciva_assistant_local.py"]
